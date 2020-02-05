@@ -78,9 +78,37 @@ export class AuthService  {
         this.reset();
         return `${this.config.oauth2Config.authorization_endpoint}?client_id=${this.config.clientId}&redirect_uri=${this.config.REDIRECT}&response_type=code&scope=${this.config.SCOPE}&state=${this.config.state}&nonce=${this.config.nonce}`;
     }
+    public loginPKCE(codeVerifier: string): string {
+        this.reset();
+        const codeChallenge =this.generateCodeChallenge(codeVerifier)
+        return `${this.config.oauth2Config.authorization_endpoint}?client_id=${this.config.clientId}&redirect_uri=${this.config.REDIRECT}&response_type=code&scope=${this.config.SCOPE}&state=${this.config.state}&nonce=${this.config.nonce}&code_challenge=${codeChallenge}&code_challenge_method=S256`;
+    }
     public logout(): string {
         this.reset();
         return  `${this.config.oauth2Config.end_session_endpoint}?redirect_uri=${this.config.REDIRECT}`;
+    }
+    public generateCodeChallenge(codeVerifier: string):string {    
+        let rtn:string;
+        crypto
+            .subtle
+            .digest('SHA-256', (new TextEncoder()).encode(codeVerifier))
+            .then((buffer: ArrayBuffer) => {
+                let hash = new Uint8Array(buffer);
+                let binary = '';
+                let hashLength = hash.byteLength;
+                for (let i: number = 0; i < hashLength; i++) {
+                binary += String.fromCharCode(hash[i]);
+                }
+                return binary;
+            })
+            .then((value)=>{
+                let base64 = btoa(value);
+                base64 = base64.replace(/\+/g, '-');
+                base64 = base64.replace(/\//g, '_');
+                base64 = base64.replace(/=/g, '');
+                rtn = base64;
+            });
+        return rtn;
     }
 
     private reset() {
@@ -101,7 +129,7 @@ export class AuthService  {
             }, (err) => this.login());
         }, (err) => console.error(err));
     }
-    public init(code ?: string, options: IInitOptions = {}) {
+    public init(code ?: string, codeVerifier?: string, options: IInitOptions = {}) {
         this.reset();
 
         let formOptions = Object.assign({}, this.formOptions);
@@ -113,7 +141,7 @@ export class AuthService  {
         }
 
         http.post(`${this.config.oauth2Config.token_endpoint}`,
-        (code)?`client_id=${this.config.clientId}&client_secret=${this.config.clientSecret}&redirect_uri=${this.config.REDIRECT}&grant_type=authorization_code&code=${code}`
+        (code)?`client_id=${this.config.clientId}&client_secret=${this.config.clientSecret}&redirect_uri=${this.config.REDIRECT}&grant_type=authorization_code&code=${code}&code_verifier=${codeVerifier}`
         :`client_id=${this.config.clientId}&client_secret=${this.config.clientSecret}&grant_type=password&username=${this.config.username}&password=${this.config.password}`,
         formOptions).then(res => <IToken> res.data).then(res=> {
             this.accessToken = res.access_token;
