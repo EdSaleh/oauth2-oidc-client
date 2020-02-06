@@ -16,6 +16,8 @@
  */
 
 import http from 'axios';
+import * as sha256 from "fast-sha256";
+import * as nacl from "tweetnacl-util";
 import { Observable } from "rxjs/Observable";
 import { Subscription } from "rxjs";
 import { timer } from "rxjs/observable/timer";
@@ -89,25 +91,14 @@ export class AuthService  {
     }
     public generateCodeChallenge(codeVerifier: string):string {    
         let rtn:string;
-        crypto
-            .subtle
-            .digest('SHA-256', (new TextEncoder()).encode(codeVerifier))
-            .then((buffer: ArrayBuffer) => {
-                let hash = new Uint8Array(buffer);
-                let binary = '';
-                let hashLength = hash.byteLength;
-                for (let i: number = 0; i < hashLength; i++) {
-                binary += String.fromCharCode(hash[i]);
-                }
-                return binary;
-            })
-            .then((value)=>{
-                let base64 = btoa(value);
-                base64 = base64.replace(/\+/g, '-');
-                base64 = base64.replace(/\//g, '_');
-                base64 = base64.replace(/=/g, '');
-                rtn = base64;
-            });
+        const uintarray = nacl.decodeUTF8(codeVerifier);
+        
+        const hashedArray = sha256.hash(uintarray);
+        let base64 = nacl.encodeBase64(hashedArray);
+        base64 = base64.replace(/\+/g, '-');
+        base64 = base64.replace(/\//g, '_');
+        base64 = base64.replace(/=/g, '');
+        rtn = base64;                
         return rtn;
     }
 
